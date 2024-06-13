@@ -1,0 +1,21 @@
+digraph ERD {
+    rankdir=LR;
+    node [shape=record];
+cliente [label="{cliente|id_cliente : integer\lcpf : character varying\l}"];
+vw_total_vendas [label="{vw_total_vendas|nome_produto : character varying\lqnt_vendas : bigint\ltotal_vendas : double precision\l}"];
+vw_cliente_compras [label="{vw_cliente_compras|id_cliente : integer\lqnt_compras : bigint\l}"];
+venda [label="{venda|id_cliente : integer\ldata_hora : date\lid_venda : integer\l}"];
+vw_estoque [label="{vw_estoque|nome_produto : character varying\ltotal : bigint\l}"];
+vw_controle [label="{vw_controle|nome_view : character varying\lid_view : integer\ldata_criacao : date\l}"];
+produto [label="{produto|id_fornecedor : integer\lpreco : double precision\lid_produto : integer\lnome : character varying\l}"];
+pessoa [label="{pessoa|nome : character varying\lid_pessoa : integer\lendereco : character varying\l}"];
+vw_fornecedor_produtos [label="{vw_fornecedor_produtos|id_fornecedor : integer\lqnt_produtos : bigint\l}"];
+item_estoque [label="{item_estoque|id_produto : integer\ldata_entrada : date\lid_item : integer\lid_venda : integer\l}"];
+fornecedor [label="{fornecedor|id_fornecedor : integer\lcnpj : character varying\l}"];
+    cliente -> pessoa [label="id_cliente -> id_pessoa"];
+    fornecedor -> pessoa [label="id_fornecedor -> id_pessoa"];
+    produto -> fornecedor [label="id_fornecedor -> id_fornecedor"];
+    venda -> cliente [label="id_cliente -> id_cliente"];
+    item_estoque -> produto [label="id_produto -> id_produto"];
+    item_estoque -> venda [label="id_venda -> id_venda"];
+}
