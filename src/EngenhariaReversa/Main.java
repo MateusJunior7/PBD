@@ -1,5 +1,7 @@
 package EngenhariaReversa;
 
+
+import java.io.FileInputStream;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.sql.Connection;
@@ -8,12 +10,21 @@ import java.sql.ResultSet;
 import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Properties;
 
 public class Main {
     public static void main(String[] args) {
-        String url = "jdbc:postgresql://localhost:5433/Produto";
-        String user = "postgres";
-        String password = "root";
+        Properties props = new Properties();
+        try (FileInputStream fis = new FileInputStream("config.properties")) {
+            props.load(fis);
+        } catch (IOException e) {
+            e.printStackTrace();
+            return;
+        }
+
+        String url = props.getProperty("db.url");
+        String user = props.getProperty("db.user");
+        String password = props.getProperty("db.password");
 
         try (Connection connection = DriverManager.getConnection(url, user, password);
              Statement statement = connection.createStatement()) {
@@ -21,7 +32,23 @@ public class Main {
             List<Tabela> tabelas = obterTabelas(statement);
             List<ChaveEstrangeira> chavesEstrangeiras = obterChavesEstrangeiras(statement);
 
+            marcarChavesPrimarias(statement, tabelas);
+            marcarChavesEstrangeiras(tabelas, chavesEstrangeiras);
             gerarArquivoDot(tabelas, chavesEstrangeiras, "diagrama.dot");
+
+            for (Tabela tabela : tabelas) {
+                System.out.println("Tabela: " + tabela.getNomeTabela());
+                for (Coluna coluna : tabela.getColunas()) {
+                    System.out.print("    Coluna: " + coluna.getNomeColuna() + " - " + coluna.getTipoDado());
+                    if (coluna.isPrimaryKey()) {
+                        System.out.print(" [PK]");
+                    }
+                    if (coluna.isForeignKey()) {
+                        System.out.print(" [FK]");
+                    }
+                    System.out.println();
+                }
+            }
 
         } catch (Exception e) {
             e.printStackTrace();
@@ -75,6 +102,35 @@ public class Main {
         return chavesEstrangeiras;
     }
 
+    private static void marcarChavesPrimarias(Statement statement, List<Tabela> tabelas) throws Exception {
+        String query = "SELECT kcu.table_schema, kcu.table_name, kcu.column_name " +
+                "FROM information_schema.table_constraints tc " +
+                "JOIN information_schema.key_column_usage kcu " +
+                "ON tc.constraint_name = kcu.constraint_name " +
+                "WHERE tc.constraint_type = 'PRIMARY KEY'";
+        ResultSet resultSet = statement.executeQuery(query);
+        while (resultSet.next()) {
+            String nomeTabela = resultSet.getString("table_name");
+            String nomeColuna = resultSet.getString("column_name");
+
+            tabelas.stream()
+                    .filter(t -> t.getNomeTabela().equals(nomeTabela))
+                    .flatMap(t -> t.getColunas().stream())
+                    .filter(c -> c.getNomeColuna().equals(nomeColuna))
+                    .forEach(c -> c.setPrimaryKey(true));
+        }
+    }
+
+    private static void marcarChavesEstrangeiras(List<Tabela> tabelas, List<ChaveEstrangeira> chavesEstrangeiras) {
+        for (ChaveEstrangeira fk : chavesEstrangeiras) {
+            tabelas.stream()
+                    .filter(t -> t.getNomeTabela().equals(fk.getNomeTabela()))
+                    .flatMap(t -> t.getColunas().stream())
+                    .filter(c -> c.getNomeColuna().equals(fk.getNomeColuna()))
+                    .forEach(c -> c.setForeignKey(true));
+        }
+    }
+
     private static void gerarArquivoDot(List<Tabela> tabelas, List<ChaveEstrangeira> chavesEstrangeiras, String filePath) {
         try (FileWriter writer = new FileWriter(filePath)) {
             writer.write("digraph ERD {\n");
@@ -88,7 +144,10 @@ public class Main {
                 sb.append(tabela.getNomeTabela()).append("|");
 
                 for (Coluna coluna : tabela.getColunas()) {
-                    sb.append(coluna.getNomeColuna()).append(" : ").append(coluna.getTipoDado()).append("\\l");
+                    sb.append(coluna.getNomeColuna()).append(" : ").append(coluna.getTipoDado());
+                    if (coluna.isPrimaryKey()) sb.append(" (PK)");
+                    if (coluna.isForeignKey()) sb.append(" (FK)");
+                    sb.append("\\l");
                 }
                 sb.append("}\"];\n");
                 writer.write(sb.toString());
